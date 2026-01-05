@@ -1,0 +1,27 @@
+run:  
+  timeout: 5m                      # 设置每个分析运行的超时时间为 5 分钟
+  modules-download-mode: readonly  # 使用只读模式下载模块，防止修改 go.mod 文件
+
+linters:  
+  enable: 
+    - errcheck                     # 强制检查 error返回值
+    - govet                        # 官方静态分析工具
+    - ineffassign                  # 检测无效赋值
+    - staticcheck                  # 更加高级的静态分析
+    - typecheck                    # 类型检查
+    - unused                       # 检测未使用的常量/变量/函数
+    - gosec                        # 安全检查 (比如 SQL 注入风险，硬编码密码)
+    - goimports                    # 检查 import 语句的格式和顺序
+
+linters-settings: 
+  errcheck: 
+    check-type-assertions: true    # 检查类型断言的错误返回值
+    check-blank: true              # 检查赋值给空白标识符的错误返回值
+  gosec:  
+    excludes: 
+      - G104                       # 暂时忽略 "Audit errors not checked" (由 errcheck 覆盖)
+
+issues: 
+  exclude-use-default: false       # 保留默认的忽略规则
+  max-issues-per-linter: 0         # 不限制每个 linter 的最大问题数
+  max-same-issues: 0               # 不限制相同问题的最大数量

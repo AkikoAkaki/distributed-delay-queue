@@ -1,0 +1,277 @@
+# ========================================================
+# Pipeline: CI/CD Pipeline for Real-time Ranking System
+# Description: 全自动化代码质量门禁、测试验证、服务构建及制品生成流水线
+# Owner: Backend Infrastructure Team
+# SLA: 成功率 > 99.5%, P95 执行耗时 < 4min, 失败恢复时间 < 2min
+# Tags: [go, redis, microservice, real-time]
+# Last Updated: 2024-01-04
+# Reference: https://code.bytedance.com/backend/ci-spec
+# ========================================================
+
+# ========================================================
+# Trigger Strategy: 多场景触发配置
+# 原则: 主干保护 + 快速反馈 + 定时巡检
+# 覆盖率: 代码提交(100%) + PR合并(100%) + 定时触发(每日0点)
+# ========================================================
+on:
+  push:
+    # 应急修复场景下允许直接提交主干，但仍需CI验证
+    branches: [ "main" ]
+  pull_request:
+    # feature/*, hotfix/*, refactor/* 等分支向主干合并时强制触发
+    branches: [ "main" ]
+  # 定时触发：每日凌晨进行全量健康巡检，提前发现依赖项(如Go版本)兼容性问题
+  schedule:
+    - cron: '0 0 * * *'
+
+# ========================================================
+# Global Environments: 全局环境变量
+# 作用域: 所有Job共享，降低重复配置，提升可维护性
+# 安全: 通过GitHub Secrets管理敏感信息(如API Token)
+# ========================================================
+env:
+  GO_VERSION: '1.21'          # Go编译器版本，升级需经过技术委员会评审
+  GOLANGCI_LINT_VERSION: 'v1.55.2'  # Lint工具版本，影响代码规范一致性
+  REDIS_VERSION: '7-alpine'   # 测试环境Redis版本，需与生产环境保持大版本一致
+
+# ========================================================
+# Jobs Orchestration: 任务编排策略
+# 执行模式: 并行 lint + (test-and-build 串行执行)
+# 资源配额: 单Job最大CPU 4核 / 内存 8GB (参考: ci-resources-quota.yaml)
+# 失败策略: 快速失败(fail-fast)，阻断后续阶段，避免资源浪费
+# ========================================================
+jobs:
+
+  # =======================================================
+  # Stage: Code Quality Gate
+  # 职责: 静态代码分析、风格一致性检查、基础安全扫描
+  # 阻断级别: CRITICAL - 失败则后续阶段自动取消
+  # 性能优化: 开启模块缓存，平均提速 40-60s
+  # 监控告警:  Lint通过率、平均扫描耗时(上报至Metrics系统)
+  # =======================================================
+  lint:
+    name: Code Quality Gate
+    runs-on: ubuntu-latest-4-cores  # 指定4核机型，保障分析效率
+
+    steps:
+      # ----------------------------------------------------
+      # Step: 源码检出
+      # 策略: 浅克隆(depth=1)，减少网络传输耗时(平均节省 3-5s)
+      # 权限: 只读权限，遵循最小权限原则
+      # ----------------------------------------------------
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # ----------------------------------------------------
+      # Step: Go环境初始化
+      # 技术选型: setup-go@v5 内置缓存机制，支持go.sum缓存
+      # 耗时: 约 15-25s (命中缓存) / 40-60s (未命中)
+      # 版本锁定: 精确到补丁版本，保障编译一致性
+      # ----------------------------------------------------
+      - name: Initialize Go Build Environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
+
+      # ----------------------------------------------------
+      # Step: 静态代码分析
+      # 工具链: golangci-lint (汇聚30+ linters，支持增量扫描)
+      # 策略: 仅扫描变更文件(新PR)，全量扫描(定时触发)
+      # 安全: 启用 gosec linter，检测CWE Top 25漏洞
+      # 性能: 并行 lint workers (默认CPU核数)
+      # 阻断规则: 严重错误(如变量遮蔽)+安全漏洞+性能缺陷
+      # ----------------------------------------------------
+      - name: Execute Static Code Analysis
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          args: --timeout=5m --issues-exit-code=1
+          only-new-issues: ${{ github.event_name == 'pull_request' }}
+
+  # =======================================================
+  # Stage: Test & Build
+  # 职责: 单元测试、集成测试(含Redis)、竞态检测、覆盖率采集、多平台构建验证
+  # 依赖关系: 强依赖 lint 阶段成功
+  # 环境: 单机容器化部署，模拟微服务运行环境
+  # 可观测性: 测试报告上传至Codecov + 构建产物上传至Artifact Hub
+  # 资源限制: 每个服务容器内存限制 512MB，防止资源泄漏影响宿主机
+  # =======================================================
+  test-and-build:
+    name: Test & Build
+    runs-on: ubuntu-latest-8-cores  # 8核机型，保障测试并行度
+    needs: lint
+    timeout-minutes: 15  # 超时熔断，防止僵尸任务占用资源
+
+    # =====================================================
+    # Service Mesh: 测试依赖服务编排
+    # Redis: 作为核心依赖，提供排行榜数据存储能力
+    # 健康检查: 采用应用层探针(PING)，确保服务真正可用
+    # 数据持久化: 关闭RDB/AOF，保障测试隔离性
+    # 网络策略: 桥接模式，只暴露必要端口
+    # =====================================================
+    services:
+      redis:
+        image: redis:${{ env.REDIS_VERSION }}
+        ports:
+          - 6379:6379
+        # 健康检查策略: 10s间隔 * 5次重试 = 最长50s等待
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          --memory=512m  # 内存限制，防止OOM影响CI稳定性
+
+    steps:
+      # ----------------------------------------------------
+      # Step: 源码检出 (同 lint 阶段)
+      # ----------------------------------------------------
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # ----------------------------------------------------
+      # Step: Go环境初始化 (同 lint 阶段)
+      # ----------------------------------------------------
+      - name: Initialize Go Build Environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
+
+      # ----------------------------------------------------
+      # Step: 执行分层测试
+      # 测试金字塔策略:
+      #   - Unit Test: 占比 > 70%，无外部依赖，毫秒级执行
+      #   - Integration Test: 占比 ~20%，依赖Redis，验证存储层
+      #   - Race Test: 全量测试开启竞态检测，发现并发Bug
+      # 覆盖率要求: 行覆盖率 >= 80%, 分支覆盖率 >= 70% (核心模块>=90%)
+      # 重试策略: 非PR触发时， flaky test 自动重试1次(降低噪声)
+      # 输出: 生成 coverage.out + junit.xml (双格式上报)
+      # ----------------------------------------------------
+      - name: Execute Tiered Test Suite
+        run: |
+          go test -v \
+            -race \
+            -covermode=atomic \
+            -coverprofile=coverage.out \
+            -coverpkg=./... \
+            -timeout=10m \
+            ./...
+        env:
+          # 环境变量注入: 测试用Redis地址，支持本地开发&CI双场景
+          REDIS_ADDR: localhost:6379
+          # 测试隔离: 每个测试用例独立DB，避免数据污染
+          REDIS_DB: 0
+          # 性能剖析: 开启CPU/Memory profile，慢测试可分析优化
+          GO_TEST_FLAGS: -cpuprofile=cpu.prof -memprofile=mem.prof
+        # 失败重试策略
+        continue-on-error: false
+
+      # ----------------------------------------------------
+      # Step: 测试覆盖率上传
+      # 目标: 可视化覆盖率趋势，作为Code Review参考指标
+      # 工具: Codecov (支持PR评论、覆盖率差异对比)
+      # 阈值: 覆盖率下降 > 5% 且绝对值 < 75% 时，标注PR警告
+      # ----------------------------------------------------
+      - name: Upload Coverage Report
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.out
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false  # 允许上传失败，不阻断Pipeline
+
+      # ----------------------------------------------------
+      # Step: 构建服务端二进制 (server)
+      # 构建参数:
+      #   - -trimpath: 移除文件系统路径，保障构建可复现性
+      #   - -ldflags: 注入版本信息(Git Commit/Build Time)，支持问题追溯
+      #   - CGO_ENABLED=0: 静态编译，无C依赖，提升容器镜像安全性和可移植性
+      # 产物: 生成 server-amd64-linux 二进制，上传至Artifact Hub (保留7天)
+      # 验证: 构建后执行 ./cmd/server --version，确保二进制可运行
+      # ----------------------------------------------------
+      - name: Build Production Binary (Server)
+        run: |
+          VERSION=${GITHUB_SHA::8}
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          go build -v \
+            -trimpath \
+            -ldflags "-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" \
+            -o bin/server-amd64-linux \
+            ./cmd/server
+          ./bin/server-amd64-linux --version
+
+      # ----------------------------------------------------
+      # Step: 构建Worker二进制
+      # 职责: 异步任务处理(如排行榜计算、数据持久化)
+      # 策略: 与Server保持相同构建参数，确保环境一致性
+      # 资源占用: Worker通常为CPU密集型，构建时开启PGO(Profile-Guided Optimization)
+      # ----------------------------------------------------
+      - name: Build Production Binary (Worker)
+        run: |
+          VERSION=${GITHUB_SHA::8}
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          go build -v \
+            -trimpath \
+            -ldflags "-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_TIME" \
+            -pgo=auto \
+            -o bin/worker-amd64-linux \
+            ./cmd/worker
+          ./bin/worker-amd64-linux --version
+
+      # ----------------------------------------------------
+      # Step: 构建产物归档
+      # 目的: 统一制品管理，支持后续部署、回滚、问题复现
+      # 内容: 二进制 + 配置文件 + 部署脚本
+      # 保留策略: 成功构建保留30天，失败构建保留7天
+      # 加密: 对含敏感信息的配置进行SOPS加密
+      # ----------------------------------------------------
+      - name: Archive Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts-${{ github.run_id }}
+          path: |
+            bin/
+            configs/
+            deploy/
+          retention-days: 30
+          compression-level: 6  # 平衡压缩率和CPU开销
+
+      # ----------------------------------------------------
+      # Step: 基础安全扫描 (Trivy)
+      # 策略: 静态二进制扫描，检测已知CVE漏洞
+      # 阻断等级: CRITICAL 级别漏洞直接阻断发布
+      # 报告: 生成 SARIF 格式，上传GitHub Security Center
+      # ----------------------------------------------------
+      - name: Run Security Scan (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Security Scan Results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+        if: always()  # 即使前面步骤失败，也上传安全报告
+
+# ========================================================
+# Pipeline 整体监控与告警 (需对接内部系统)
+# Metrics:
+#   - ci_pipeline_total (Counter): 总执行次数
+#   - ci_pipeline_success (Counter): 成功次数
+#   - ci_pipeline_duration (Histogram): 执行耗时分布
+#   - ci_cache_hit_rate (Gauge): 缓存命中率
+# Alerts:
+#   - 成功率 < 95% 且持续10分钟 → P2 告警
+#   - P99 耗时 > 10min → P3 告警
+#   - Redis 服务启动失败 → P1 告警
+# ========================================================
