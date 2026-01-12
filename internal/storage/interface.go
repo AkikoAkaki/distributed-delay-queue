@@ -33,4 +33,8 @@ type JobStore interface {
 	// @Param id: 任务全局唯一 ID。
 	// @Return: 若 ID 不存在，实现者应根据业务需求决定是否返回特定错误。
 	Remove(ctx context.Context, id string) error
+
+	Ack(ctx context.Context, id string) error
+
+	Nack(ctx context.Context, task *pb.Task) error
 }

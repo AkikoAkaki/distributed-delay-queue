@@ -16,9 +16,14 @@ import (
 // Store 实现了 storage.JobStore 接口，作为任务持久化的 Redis 适配器。
 // @ThreadSafe: redis.Client 本身并发安全，Store 实例支持多协程共用。
 type Store struct {
-	client *redis.Client // Redis 官方 Golang 客户端
-	pending_key string        // 待处理任务的 Key 名称（业务隔离前缀）ZSet: ddq tasks
-	running_key string        // 正在处理任务的 Key 名称（业务隔离前缀）Hash: ddq running
+	client     *redis.Client // Redis 官方 Golang 客户端
+	pendingKey string        // 待处理任务的 Key 名称（业务隔离前缀）ZSet: ddq tasks
+	runningKey string        // 正在处理任务的 Key 名称（业务隔离前缀）Hash: ddq running
+	dlqKey     string        // 死信队列 Key 名称（业务隔离前缀）List: ddq dlq
+}
+
+func (s *Store) GetClient() *redis.Client {
+	return s.client
 }
 
 // 编译期校验：确保 Store 结构体完整实现了 JobStore 定义的所有契约。
@@ -31,9 +36,10 @@ func NewStore(addr string) *Store {
 		Addr: addr,
 	})
 	return &Store{
-		client: rdb,
-		pending_key: "ddq:tasks", // Default namespace
-		running_key: "ddq:running", // Default namespace
+		client:     rdb,
+		pendingKey: "ddq:tasks",   // Default namespace
+		runningKey: "ddq:running", // Default namespace
+		dlqKey:     "ddq:dlq",
 	}
 }
 
@@ -55,7 +61,7 @@ func (s *Store) Add(ctx context.Context, task *pb.Task) error {
 	}
 
 	// 3. 执行写入：若写入失败需向上层抛出 Error 由 Service 层决定重试逻辑。
-	if err := s.client.ZAdd(ctx, s.pending_key, member).Err(); err != nil {
+	if err := s.client.ZAdd(ctx, s.pendingKey, member).Err(); err != nil {
 		return fmt.Errorf("redis zadd failed: %w", err)
 	}
 
@@ -71,7 +77,7 @@ func (s *Store) FetchAndHold(ctx context.Context, topic string, limit int64) ([]
 	// 1. 调用 Lua 脚本进行原子弹出。
 	// @Optimization: MVP 版本暂不支持按 Topic 分片，全局共用一个 ZSet。
 	val, err := s.client.Eval(ctx, luaFetchAndHold,
-		[]string{s.pending_key, s.running_key},
+		[]string{s.pendingKey, s.runningKey},
 		now, limit, now).Result()
 	if err != nil {
 		if err == redis.Nil {
@@ -110,4 +116,42 @@ func (s *Store) FetchAndHold(ctx context.Context, topic string, limit int64) ([]
 // @Warning: 当前 ZSet 结构不支持基于 ID 的 O(1) 检索，需引入 ID->Payload 的索引映射。
 func (s *Store) Remove(ctx context.Context, id string) error {
 	return fmt.Errorf("not implemented")
+}
+
+// Ack 实现
+func (s *Store) Ack(ctx context.Context, id string) error {
+	// 简单直接：从 Hash 中删除即可
+	return s.client.Eval(ctx, luaAck, []string{s.runningKey}, id).Err()
+}
+
+// Nack 实现
+func (s *Store) Nack(ctx context.Context, task *pb.Task) error {
+	// 1. 更新重试计数
+	task.RetryCount++
+
+	isDead := 0
+	// 2. 检查是否超过最大重试次数
+	if task.RetryCount >= task.MaxRetries {
+		isDead = 1
+	}
+
+	// 3. 序列化更新后的 Task
+	bytes, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("marshal task failed: %w", err)
+	}
+
+	// 4. 计算下次重试时间 (这里简单策略：立即重试，即 Now。工业级可以做指数退避)
+	retryTime := time.Now().Unix()
+
+	// 5. 执行 Lua
+	err = s.client.Eval(ctx, luaNack,
+		[]string{s.runningKey, s.pendingKey, s.dlqKey}, // KEYS
+		task.Id, bytes, retryTime, isDead, // ARGV
+	).Err()
+
+	if err != nil {
+		return fmt.Errorf("nack failed: %w", err)
+	}
+	return nil
 }

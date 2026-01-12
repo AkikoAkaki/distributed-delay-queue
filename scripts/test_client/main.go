@@ -22,6 +22,7 @@ func main() {
 		Topic:        "email",
 		Payload:      `{"user": "alice"}`,
 		DelaySeconds: 5,
+		MaxRetries:   1, // 设置为 1，方便测试一次失败就进死信
 	})
 	if err != nil {
 		log.Fatalf("Enqueue failed: %v", err)

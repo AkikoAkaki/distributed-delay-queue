@@ -30,6 +30,108 @@ Lightweight, Redis-backed delayed job service with a gRPC surface and room to ev
 | `internal/storage` | Storage interfaces plus the Redis implementation. |
 | `docs` | Developer setup, API contract, architecture notes, and ADRs. |
 
+## Code Structure
+
+```
+distributed-delay-queue/
+├── .chglog/                          # Changelog generation configuration
+│   ├── CHANGELOG.tpl.md              # Template for generating changelog entries
+│   └── config.yml                    # git-chglog configuration file
+│
+├── .github/                          # GitHub-specific configurations
+│   └── workflows/
+│       └── ci.yaml                   # CI/CD pipeline configuration for automated testing
+│
+├── api/                              # API definitions and generated code
+│   └── proto/
+│       ├── queue.proto               # Protobuf service definition for DelayQueueService
+│       ├── queue.pb.go               # Generated Go types from Protobuf
+│       └── queue_grpc.pb.go          # Generated gRPC server/client stubs
+│
+├── cmd/                              # Executable entry points
+│   ├── server/
+│   │   └── main.go                   # gRPC server that handles enqueue/retrieve/delete operations
+│   └── worker/
+│       └── main.go                   # Worker process that retrieves and executes delayed tasks
+│
+├── config/                           # Configuration files
+│   ├── config.example.yaml           # Example configuration template with all available options
+│   └── config.yaml                   # Active configuration (gitignored, created from example)
+│
+├── deploy/                           # Deployment and infrastructure
+│   └── docker-compose.yaml           # Docker Compose stack for Redis dependency
+│
+├── docs/                             # Project documentation
+│   ├── API.md                        # API reference with gRPC method signatures and examples
+│   ├── ARCHITECTURE.md               # System architecture, component design, and scaling strategy
+│   ├── DEV_SETUP.md                  # Development environment setup guide (Windows-focused)
+│   ├── DEV_WORKFLOW.md               # Development workflow and contribution guidelines
+│   └── adr/                          # Architecture Decision Records
+│       ├── 001-architecture-and-storage.md  # Decision record for Redis-based storage
+│       └── 002-gitflow-and-versioning.md    # Decision record for Git workflow and versioning
+│
+├── internal/                         # Private application code
+│   ├── common/
+│   │   └── errno/
+│   │       └── error.go              # Common error definitions and error handling utilities
+│   │
+│   ├── conf/
+│   │   └── config.go                 # Configuration loading and validation logic
+│   │
+│   ├── queue/
+│   │   ├── service.go                # Core delay queue business logic implementation
+│   │   └── service_test.go           # Unit tests for queue service with mocked storage
+│   │
+│   ├── scheduler/                    # Scheduler component (polls for due tasks)
+│   │
+│   └── storage/                      # Storage layer abstraction
+│       ├── interface.go              # JobStore interface definition
+│       ├── mocks/
+│       │   └── store_mock.go         # Mock implementation for testing (generated)
+│       └── redis/
+│           ├── script.go             # Lua scripts for atomic Redis operations
+│           └── store.go              # Redis implementation of JobStore interface
+│
+├── scripts/                          # Utility scripts
+│   └── test_client.go                # Test client for manual gRPC API verification
+│
+├── .gitignore                        # Git ignore patterns
+├── .golangci.yml                     # golangci-lint configuration for code quality checks
+├── CHANGELOG.md                      # Project changelog (auto-generated)
+├── DEVELOPMENT_LOG.md                # Development progress and decision log
+├── Dockerfile                        # Container image definition for the service
+├── go.mod                            # Go module dependencies
+├── go.sum                            # Go module checksums
+├── Makefile                          # Build automation and common development tasks
+└── README.md                         # Project overview and getting started guide
+```
+
+### Key Files Explained
+
+**API Layer**
+- `api/proto/queue.proto`: Defines the `DelayQueueService` gRPC contract with `Enqueue`, `Retrieve`, and `Delete` methods
+- Generated `.pb.go` files: Auto-generated from proto definitions (regenerate with `make proto`)
+
+**Application Entry Points**
+- `cmd/server/main.go`: Initializes gRPC server, loads configuration, and connects to Redis storage
+- `cmd/worker/main.go`: Worker daemon that polls for due tasks and executes them
+
+**Core Business Logic**
+- `internal/queue/service.go`: Implements delay queue operations including task scheduling, retrieval with retry logic, and deletion
+- `internal/storage/interface.go`: Defines storage abstraction for pluggable backends
+- `internal/storage/redis/store.go`: Redis-backed storage using Sorted Sets for time-based task scheduling
+- `internal/storage/redis/script.go`: Lua scripts ensuring atomic batch retrieval from Redis
+
+**Configuration & Infrastructure**
+- `config/config.example.yaml`: Documents all configuration options (server, Redis, queue settings)
+- `deploy/docker-compose.yaml`: Local development stack with Redis container
+- `Dockerfile`: Multi-stage build for production deployment
+
+**Development Tools**
+- `Makefile`: Provides targets for building, testing, linting, and running services
+- `.golangci.yml`: Linter rules for code quality enforcement
+- `.github/workflows/ci.yaml`: Automated CI pipeline for testing and validation
+
 ## Quick Start
 1. **Install prerequisites**
 	- Go 1.21+

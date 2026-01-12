@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	proto "github.com/AkikoAkaki/distributed-delay-queue/api/proto"
+	pb "github.com/AkikoAkaki/distributed-delay-queue/api/proto"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -41,8 +41,22 @@ func (m *MockJobStore) EXPECT() *MockJobStoreMockRecorder {
 	return m.recorder
 }
 
+// Ack mocks base method.
+func (m *MockJobStore) Ack(ctx context.Context, id string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Ack", ctx, id)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Ack indicates an expected call of Ack.
+func (mr *MockJobStoreMockRecorder) Ack(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ack", reflect.TypeOf((*MockJobStore)(nil).Ack), ctx, id)
+}
+
 // Add mocks base method.
-func (m *MockJobStore) Add(ctx context.Context, task *proto.Task) error {
+func (m *MockJobStore) Add(ctx context.Context, task *pb.Task) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Add", ctx, task)
 	ret0, _ := ret[0].(error)
@@ -55,19 +69,33 @@ func (mr *MockJobStoreMockRecorder) Add(ctx, task any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockJobStore)(nil).Add), ctx, task)
 }
 
-// GetReady mocks base method.
-func (m *MockJobStore) GetReady(ctx context.Context, topic string, limit int64) ([]*proto.Task, error) {
+// FetchAndHold mocks base method.
+func (m *MockJobStore) FetchAndHold(ctx context.Context, topic string, limit int64) ([]*pb.Task, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetReady", ctx, topic, limit)
-	ret0, _ := ret[0].([]*proto.Task)
+	ret := m.ctrl.Call(m, "FetchAndHold", ctx, topic, limit)
+	ret0, _ := ret[0].([]*pb.Task)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetReady indicates an expected call of GetReady.
-func (mr *MockJobStoreMockRecorder) GetReady(ctx, topic, limit any) *gomock.Call {
+// FetchAndHold indicates an expected call of FetchAndHold.
+func (mr *MockJobStoreMockRecorder) FetchAndHold(ctx, topic, limit any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReady", reflect.TypeOf((*MockJobStore)(nil).GetReady), ctx, topic, limit)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchAndHold", reflect.TypeOf((*MockJobStore)(nil).FetchAndHold), ctx, topic, limit)
+}
+
+// Nack mocks base method.
+func (m *MockJobStore) Nack(ctx context.Context, task *pb.Task) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Nack", ctx, task)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Nack indicates an expected call of Nack.
+func (mr *MockJobStoreMockRecorder) Nack(ctx, task any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Nack", reflect.TypeOf((*MockJobStore)(nil).Nack), ctx, task)
 }
 
 // Remove mocks base method.

@@ -49,3 +49,49 @@ else
     return {}
 end
 `
+
+// luaAck 确认任务完成
+// KEYS[1]: Running Hash (ddq:running)
+// ARGV[1]: TaskID
+const luaAck = `
+return redis.call('HDEL', KEYS[1], ARGV[1])
+`
+
+// luaNack 任务失败重试
+// @Logic
+// 1. 从 Running 移除
+// 2. 判断是否超过最大重试次数
+// 3. 没超过 -> 更新 retry_count -> ZADD 回 Pending
+// 4. 超过了 -> LPUSH 到 DLQ (死信队列)
+//
+// @Parameters
+// KEYS[1]: Running Hash (ddq:running)
+// KEYS[2]: Pending ZSet (ddq:tasks)
+// KEYS[3]: Dead Letter Queue (ddq:dlq)
+// ARGV[1]: TaskID
+// ARGV[2]: JSON Payload (包含更新后的 retry_count 的完整 task 结构)
+// ARGV[3]: Next Execute Time (重试的执行时间，通常是现在)
+// ARGV[4]: Is Dead (1=进死信, 0=重试)
+const luaNack = `
+local running_key = KEYS[1]
+local pending_key = KEYS[2]
+local dlq_key = KEYS[3]
+
+local id = ARGV[1]
+local task_json = ARGV[2]
+local score = ARGV[3]
+local is_dead = tonumber(ARGV[4])
+
+-- 1. 无论如何，先从正在运行列表移除
+redis.call('HDEL', running_key, id)
+
+if is_dead == 1 then
+    -- 2. 超过重试次数，进死信队列
+    redis.call('LPUSH', dlq_key, task_json)
+else
+    -- 3. 没超过，放回等待队列重试
+    redis.call('ZADD', pending_key, score, task_json)
+end
+
+return 1
+`
