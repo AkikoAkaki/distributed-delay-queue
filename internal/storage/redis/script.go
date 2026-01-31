@@ -95,3 +95,61 @@ end
 
 return 1
 `
+
+// luaRecover 扫描并恢复超时任务
+// 逻辑：
+// 1. 获取所有 Running 任务 (HGETALL)
+// 2. 遍历检查：如果 (now - start_time) > visibility_timeout
+// 3. 执行 NACK 逻辑 (retry++ -> ZADD/LPUSH -> HDEL)
+//
+// KEYS[1]: Running Hash
+// KEYS[2]: Pending ZSet
+// KEYS[3]: Dead Letter Queue
+// ARGV[1]: Now Timestamp
+// ARGV[2]: Visibility Timeout
+// ARGV[3]: Max Retries
+const luaRecover = `
+local running_key = KEYS[1]
+local pending_key = KEYS[2]
+local dlq_key = KEYS[3]
+local now = tonumber(ARGV[1])
+local timeout = tonumber(ARGV[2])
+local max_retries = tonumber(ARGV[3])
+
+-- 1. 获取所有正在运行的任务 (注意：生产环境若 Hash 巨大，应用 HSCAN 代替)
+local all_running = redis.call('HGETALL', running_key)
+
+-- HGETALL 返回的是 [key1, val1, key2, val2...] 的数组
+for i = 1, #all_running, 2 do
+    local id = all_running[i]
+    local val_str = all_running[i+1]
+    
+    local entry = cjson.decode(val_str)
+    local start_time = tonumber(entry.start)
+    local task = entry.task
+
+    -- 2. 检查是否超时
+    if (now - start_time) > timeout then
+        -- 3. 超时了！执行恢复逻辑
+        
+        -- a. 更新元数据
+        task.retry_count = (task.retry_count or 0) + 1
+        -- 为了存储，重新 encode task
+        local task_json = cjson.encode(task)
+
+        -- b. 从 Running 移除
+        redis.call('HDEL', running_key, id)
+
+        -- c. 判断去向
+        if task.retry_count >= max_retries then
+            -- 进死信
+            redis.call('LPUSH', dlq_key, task_json)
+        else
+            -- 重新进队列 (立即重试，Score = Now)
+            redis.call('ZADD', pending_key, now, task_json)
+        end
+    end
+end
+
+return 1
+`

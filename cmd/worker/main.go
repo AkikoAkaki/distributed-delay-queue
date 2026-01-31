@@ -60,6 +60,12 @@ func main() {
 						// 工业级：这里应该扔给一个 Worker Pool 线程池去并发执行，而不是串行阻塞
 						log.Printf("[EXECUTE] TaskID: %s, Payload: %s, Delay: %ds",
 							t.Id, t.Payload, time.Now().Unix()-t.ExecuteTime)
+						
+						// 🔥 模拟 Worker 卡死 10 秒，用于验证 Watchdog 恢复机制
+						// visibility_timeout = 5s，所以 Watchdog 会在 5 秒后把任务捞回队列
+						log.Printf("[SIMULATE] Worker is stuck for 10 seconds (simulating crash)...")
+						time.Sleep(10 * time.Second)
+						log.Printf("[SIMULATE] Worker recovered (this should NOT appear if killed)")
 					}
 				}
 			}

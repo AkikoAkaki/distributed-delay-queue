@@ -22,8 +22,8 @@ type Store struct {
 	dlqKey     string        // 死信队列 Key 名称（业务隔离前缀）List: ddq dlq
 }
 
-func (s *Store) GetClient() *redis.Client {
-	return s.client
+func (s *Store) GetClient() {
+	panic("unimplemented")
 }
 
 // 编译期校验：确保 Store 结构体完整实现了 JobStore 定义的所有契约。
@@ -152,6 +152,21 @@ func (s *Store) Nack(ctx context.Context, task *pb.Task) error {
 
 	if err != nil {
 		return fmt.Errorf("nack failed: %w", err)
+	}
+	return nil
+}
+
+// CheckAndMoveExpired 实现接口
+func (s *Store) CheckAndMoveExpired(ctx context.Context, visibilityTimeout int64, maxRetries int32) error {
+	now := time.Now().Unix()
+
+	err := s.client.Eval(ctx, luaRecover,
+		[]string{s.runningKey, s.pendingKey, s.dlqKey}, // KEYS
+		now, visibilityTimeout, maxRetries,               // ARGV
+	).Err()
+
+	if err != nil {
+		return fmt.Errorf("recover failed: %w", err)
 	}
 	return nil
 }

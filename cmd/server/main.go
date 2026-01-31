@@ -1,3 +1,5 @@
+// Package main 项目启动入口。
+// 职责：负责配置加载、基础设施（Redis）初始化、gRPC 服务注册以及生命周期管理（优雅退出）。
 package main
 
 import (
@@ -9,20 +11,19 @@ import (
 	"syscall"
 
 	pb "github.com/AkikoAkaki/distributed-delay-queue/api/proto"
-	"github.com/AkikoAkaki/distributed-delay-queue/internal/conf" // 引入配置包
+	"github.com/AkikoAkaki/distributed-delay-queue/internal/conf"
 	"github.com/AkikoAkaki/distributed-delay-queue/internal/queue"
+	"github.com/AkikoAkaki/distributed-delay-queue/internal/scheduler"
 	"github.com/AkikoAkaki/distributed-delay-queue/internal/storage/redis"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
 
 func main() {
-	// 1. 加载配置
-	// 注意：在 Docker 中 config 可能会 mount 到 /app/config
-	// 在本地开发时，可能在 ./config
+	// 1. 配置加载。
+	// @Step: 依次尝试从当前目录及上级目录搜索 config 配置文件并加载。
 	cfg, err := conf.Load("./config")
 	if err != nil {
-		// 如果本地找不到，尝试上一级目录（兼容 go run 在不同目录执行的情况）
 		cfg, err = conf.Load("../../config")
 		if err != nil {
 			log.Fatalf("failed to load config: %v", err)
@@ -31,21 +32,31 @@ func main() {
 
 	log.Printf("Starting %s [%s]...", cfg.App.Name, cfg.App.Env)
 
-	// 2. 初始化 Redis (使用配置)
+	// 2. 核心存储层初始化。
+	// @Note: 使用 Redis 作为主存储，内部包含 JobStore 接口实现。
 	store := redis.NewStore(cfg.Redis.Addr)
 
-	// 3. 监听端口 (使用配置)
+	// 3. 异步调度组件启动。
+	// @Watchdog: 负责可见性超时任务的自动恢复。
+	wd := scheduler.NewWatchdog(cfg.Queue, store)
+    wd.Start()
+
+	// 4. 网络层监听。
+	// @Address: 默认从配置中读取 gRPC 端口号。
 	addr := fmt.Sprintf(":%d", cfg.Server.GrpcPort)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
+	// 5. gRPC 服务注册。
+	// @Services: 注册延迟队列业务服务，并开启反射（Reflection）以便于调试。
 	s := grpc.NewServer()
 	svc := queue.NewService(store)
 	pb.RegisterDelayQueueServiceServer(s, svc)
 	reflection.Register(s)
 
+	// 6. 协议服务启动。
 	go func() {
 		log.Printf("gRPC server listening at %v", lis.Addr())
 		if err := s.Serve(lis); err != nil {
@@ -53,12 +64,14 @@ func main() {
 		}
 	}()
 
-	// 4. 优雅退出
+	// 7. 优雅关闭响应。
+	// @Mechanism: 捕捉系统终止信号，确保清理后台协程并停止接受新连接后再退出。
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
 	log.Println("Shutting down gRPC server...")
+	wd.Stop()
 	s.GracefulStop()
 	log.Println("Server stopped")
 }

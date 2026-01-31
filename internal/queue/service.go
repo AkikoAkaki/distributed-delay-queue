@@ -1,5 +1,5 @@
 // Package queue 实现了延迟队列的核心业务逻辑。
-// 适用场景：处理 gRPC 请求，参数校验，并调用存储层。
+// 适用场景：处理 gRPC 请求，参数校验，并将任务调度下发至存储层。
 package queue
 
 import (
@@ -14,22 +14,27 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Service 实现 pb.DelayQueueServiceServer 接口。
+// Service 延迟队列 gRPC 服务实现。
+// @Description 充当业务网关（Gateway），负责输入校验、ID 生成、任务规整，最后通过 JobStore 接口实现持久化。
 type Service struct {
 	pb.UnimplementedDelayQueueServiceServer
-	store storage.JobStore
+	store storage.JobStore // 任务持久化后端实现
 }
 
-// NewService 创建一个新的 Service 实例。
+// NewService 创建延迟队列服务实例。
+// @Param store: 任务存取引擎的实现，通常为 Redis 实现。
 func NewService(store storage.JobStore) *Service {
 	return &Service{
 		store: store,
 	}
 }
 
-// Enqueue 处理任务提交请求。
+// Enqueue 处理任务提交请求（入队）。
+// @Complexity: O(log(N))，取决于存储实现。
+// @Return: 成功则返回任务分配的唯一 ID；失败则返回 gRPC 错误码。
 func (s *Service) Enqueue(ctx context.Context, req *pb.EnqueueRequest) (*pb.EnqueueResponse, error) {
-	// 1. 参数校验 (工业级必须)
+	// 1. 参数校验。
+	// @Validation: 检查 Topic、Payload 是否为空，延时时间是否合法。
 	if req.Topic == "" || req.Payload == "" {
 		return nil, status.Error(codes.InvalidArgument, errno.ErrInvalidParam.Message)
 	}
@@ -37,18 +42,21 @@ func (s *Service) Enqueue(ctx context.Context, req *pb.EnqueueRequest) (*pb.Enqu
 		return nil, status.Error(codes.InvalidArgument, "delay_seconds must be >= 0")
 	}
 
-	// 2. 生成 Task ID (如果客户端没传)
+	// 2. 身份标识分配。
+	// @Note: 优先使用客户端传入的 ID 以支持幂等提交，否则由系统自动生成 UUID。
 	taskID := req.Id
 	if taskID == "" {
 		taskID = uuid.New().String()
 	}
 
+	// 3. 策略初始化。
+	// @Default: 若未指定最大重试次数，则赋予系统预设默认值（3次）。
 	maxRetries := req.MaxRetries
 	if maxRetries == 0 {
-		maxRetries = 3 // 硬编码默认值，或者后续通过依赖注入传入 Config
+		maxRetries = 3 
 	}
 
-	// 3. 构造核心实体 Task
+	// 4. 构造任务实体快照。
 	task := &pb.Task{
 		Id:          taskID,
 		Topic:       req.Topic,
@@ -59,9 +67,9 @@ func (s *Service) Enqueue(ctx context.Context, req *pb.EnqueueRequest) (*pb.Enqu
 		CreatedAt:   time.Now().Unix(),
 	}
 
-	// 4. 调用存储层
+	// 5. 调用持久化层。
+	// @ErrorHandling: 若存储层故障（如 Redis 连接断开），返回 Internal 错误给客户端以便重试。
 	if err := s.store.Add(ctx, task); err != nil {
-		// 这里应该记录 Log，为了简洁省略
 		return &pb.EnqueueResponse{
 			Success:      false,
 			ErrorMessage: "failed to store task",
@@ -74,11 +82,14 @@ func (s *Service) Enqueue(ctx context.Context, req *pb.EnqueueRequest) (*pb.Enqu
 	}, nil
 }
 
-// Retrieve 目前 Worker 是直接连 Redis 的，这个接口暂时留空，或者是给外部 Admin 用的。
+// Retrieve 拉取任务（Admin/Monitoring 扩展接口）。
+// @Status: Unimplemented
 func (s *Service) Retrieve(ctx context.Context, req *pb.RetrieveRequest) (*pb.RetrieveResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Retrieve not implemented yet")
 }
 
+// Delete 撤销任务。
+// @Status: Unimplemented
 func (s *Service) Delete(ctx context.Context, req *pb.DeleteRequest) (*pb.DeleteResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Delete not implemented yet")
 }

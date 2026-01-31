@@ -12,6 +12,6 @@ redis:
   db: 0
 
 queue:
-  visibility_timeout: 60 # 60秒没处理完，就认为 Worker 挂了
-  watchdog_interval: 30  # 每 30秒检查一次
+  visibility_timeout: 5  # 5 秒没处理完，就认为 Worker 挂了
+  watchdog_interval: 5   # 每 5 秒检查一次
   max_retries: 3         # 默认重试 3 次

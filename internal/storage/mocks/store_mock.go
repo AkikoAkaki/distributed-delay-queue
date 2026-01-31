@@ -69,6 +69,20 @@ func (mr *MockJobStoreMockRecorder) Add(ctx, task any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockJobStore)(nil).Add), ctx, task)
 }
 
+// CheckAndMoveExpired mocks base method.
+func (m *MockJobStore) CheckAndMoveExpired(ctx context.Context, visibilityTimeout int64, maxRetries int32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CheckAndMoveExpired", ctx, visibilityTimeout, maxRetries)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CheckAndMoveExpired indicates an expected call of CheckAndMoveExpired.
+func (mr *MockJobStoreMockRecorder) CheckAndMoveExpired(ctx, visibilityTimeout, maxRetries any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckAndMoveExpired", reflect.TypeOf((*MockJobStore)(nil).CheckAndMoveExpired), ctx, visibilityTimeout, maxRetries)
+}
+
 // FetchAndHold mocks base method.
 func (m *MockJobStore) FetchAndHold(ctx context.Context, topic string, limit int64) ([]*pb.Task, error) {
 	m.ctrl.T.Helper()

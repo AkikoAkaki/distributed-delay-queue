@@ -37,4 +37,6 @@ type JobStore interface {
 	Ack(ctx context.Context, id string) error
 
 	Nack(ctx context.Context, task *pb.Task) error
+
+	CheckAndMoveExpired(ctx context.Context, visibilityTimeout int64, maxRetries int32) error
 }
