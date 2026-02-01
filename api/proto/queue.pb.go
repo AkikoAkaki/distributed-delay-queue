@@ -7,11 +7,12 @@
 package pb
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -475,7 +476,7 @@ const file_api_proto_queue_proto_rawDesc = "" +
 	"\x11DelayQueueService\x12@\n" +
 	"\aEnqueue\x12\x19.api.queue.EnqueueRequest\x1a\x1a.api.queue.EnqueueResponse\x12C\n" +
 	"\bRetrieve\x12\x1a.api.queue.RetrieveRequest\x1a\x1b.api.queue.RetrieveResponse\x12=\n" +
-	"\x06Delete\x12\x18.api.queue.DeleteRequest\x1a\x19.api.queue.DeleteResponseB<Z:github.com/AkikoAkaki/async-task-platfrom/api/proto;pbb\x06proto3"
+	"\x06Delete\x12\x18.api.queue.DeleteRequest\x1a\x19.api.queue.DeleteResponseB8Z6github.com/AkikoAkaki/async-task-platform/api/proto;pbb\x06proto3"
 
 var (
 	file_api_proto_queue_proto_rawDescOnce sync.Once

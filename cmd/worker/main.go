@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/AkikoAkaki/async-task-platfrom/internal/conf"
-	"github.com/AkikoAkaki/async-task-platfrom/internal/storage/redis"
+	"github.com/AkikoAkaki/async-task-platform/internal/conf"
+	"github.com/AkikoAkaki/async-task-platform/internal/storage/redis"
 )
 
 func main() {
@@ -61,6 +61,15 @@ func main() {
 						log.Printf("[EXECUTE] TaskID: %s, Payload: %s, Delay: %ds",
 							t.Id, t.Payload, time.Now().Unix()-t.ExecuteTime)
 
+						// 3. 任务执行成功后，调用 Ack 确认完成
+						// @Critical: 如果不调用 Ack，任务会永远停留在 Running 状态，
+						// 最终被 Watchdog 认为超时并重新入队，导致重复执行。
+						if err := store.Ack(ctx, t.Id); err != nil {
+							log.Printf("[ERROR] Ack failed for task %s: %v", t.Id, err)
+							// 注意：Ack 失败意味着任务状态不一致，Watchdog 会恢复它
+						} else {
+							log.Printf("[ACK] Task %s completed successfully", t.Id)
+						}
 					}
 				}
 			}

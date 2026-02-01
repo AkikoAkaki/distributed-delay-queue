@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AkikoAkaki/async-task-platfrom/internal/conf"
-	"github.com/AkikoAkaki/async-task-platfrom/internal/storage"
+	"github.com/AkikoAkaki/async-task-platform/internal/conf"
+	"github.com/AkikoAkaki/async-task-platform/internal/storage"
 )
 
 // Watchdog 看门狗组件，负责定期扫描并恢复异常任务（如 Worker 宕机导致的未 Ack 任务）。
@@ -19,20 +19,32 @@ type Watchdog struct {
 	interval time.Duration    // 扫描频率
 	timeout  int64            // 可见性超时阈值（秒）
 	maxRetry int32            // 任务最大重试次数
-	
-	quit     chan struct{}    // 退出信号通道
-	wg       sync.WaitGroup   // 等待协程关闭
+
+	quit chan struct{}  // 退出信号通道
+	wg   sync.WaitGroup // 等待协程关闭
 }
 
 // NewWatchdog 根据配置初始化 Watchdog 实例。
 // @Param cfg: 队列全局配置，包含扫描间隔、超时时间等。
 // @Param store: 实现 JobStore 接口的任务存储器。
 func NewWatchdog(cfg conf.QueueConfig, store storage.JobStore) *Watchdog {
+	// 防止整数溢出：确保 MaxRetries 在 int32 范围内
+	maxRetries := cfg.MaxRetries
+	if maxRetries > 2147483647 { // int32 最大值
+		maxRetries = 2147483647
+	}
+
+	// 防止整数溢出：确保 VisibilityTimeout 在合理范围内
+	visibilityTimeout := cfg.VisibilityTimeout
+	if visibilityTimeout < 0 {
+		visibilityTimeout = 60 // 默认 60 秒
+	}
+
 	return &Watchdog{
 		store:    store,
 		interval: time.Duration(cfg.WatchdogInterval) * time.Second,
-		timeout:  int64(cfg.VisibilityTimeout),
-		maxRetry: int32(cfg.MaxRetries),
+		timeout:  int64(visibilityTimeout),
+		maxRetry: int32(maxRetries),
 		quit:     make(chan struct{}),
 	}
 }

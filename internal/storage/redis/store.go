@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	pb "github.com/AkikoAkaki/async-task-platfrom/api/proto"
-	"github.com/AkikoAkaki/async-task-platfrom/internal/storage"
+	pb "github.com/AkikoAkaki/async-task-platform/api/proto"
+	"github.com/AkikoAkaki/async-task-platform/internal/storage"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -22,8 +22,10 @@ type Store struct {
 	dlqKey     string        // 死信队列 Key 名称（业务隔离前缀）List: ddq dlq
 }
 
-func (s *Store) GetClient() {
-	panic("unimplemented")
+// GetClient 返回底层的 Redis 客户端实例。
+// @Warning: 仅用于测试脚本直接操作 Redis，生产代码应通过 JobStore 接口。
+func (s *Store) GetClient() *redis.Client {
+	return s.client
 }
 
 // 编译期校验：确保 Store 结构体完整实现了 JobStore 定义的所有契约。
@@ -162,7 +164,7 @@ func (s *Store) CheckAndMoveExpired(ctx context.Context, visibilityTimeout int64
 
 	err := s.client.Eval(ctx, luaRecover,
 		[]string{s.runningKey, s.pendingKey, s.dlqKey}, // KEYS
-		now, visibilityTimeout, maxRetries,               // ARGV
+		now, visibilityTimeout, maxRetries, // ARGV
 	).Err()
 
 	if err != nil {

@@ -1,5 +1,5 @@
 app:
-  name: "async-task-platfrom"
+  name: "async-task-platform"
   env: "local" # local, dev, prod
 
 server:

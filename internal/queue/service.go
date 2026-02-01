@@ -6,9 +6,9 @@ import (
 	"context"
 	"time"
 
-	pb "github.com/AkikoAkaki/async-task-platfrom/api/proto"
-	"github.com/AkikoAkaki/async-task-platfrom/internal/common/errno"
-	"github.com/AkikoAkaki/async-task-platfrom/internal/storage"
+	pb "github.com/AkikoAkaki/async-task-platform/api/proto"
+	"github.com/AkikoAkaki/async-task-platform/internal/common/errno"
+	"github.com/AkikoAkaki/async-task-platform/internal/storage"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -53,7 +53,7 @@ func (s *Service) Enqueue(ctx context.Context, req *pb.EnqueueRequest) (*pb.Enqu
 	// @Default: 若未指定最大重试次数，则赋予系统预设默认值（3次）。
 	maxRetries := req.MaxRetries
 	if maxRetries == 0 {
-		maxRetries = 3 
+		maxRetries = 3
 	}
 
 	// 4. 构造任务实体快照。

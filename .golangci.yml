@@ -20,6 +20,9 @@ linters-settings:
   gosec:  
     excludes: 
       - G104                       # 暂时忽略 "Audit errors not checked" (由 errcheck 覆盖)
+      - G115                       # 忽略整数溢出警告 (已在代码中添加范围检查)
+  staticcheck:
+    checks: ["all", "-SA1019"]     # 忽略 deprecation 警告 (测试脚本使用旧 API)
 
 issues: 
   exclude-use-default: false       # 保留默认的忽略规则

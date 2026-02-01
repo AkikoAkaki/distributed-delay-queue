@@ -125,4 +125,3 @@ func (mr *MockJobStoreMockRecorder) Remove(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Remove", reflect.TypeOf((*MockJobStore)(nil).Remove), ctx, id)
 }
-

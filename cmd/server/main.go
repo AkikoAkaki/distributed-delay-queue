@@ -10,11 +10,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	pb "github.com/AkikoAkaki/async-task-platfrom/api/proto"
-	"github.com/AkikoAkaki/async-task-platfrom/internal/conf"
-	"github.com/AkikoAkaki/async-task-platfrom/internal/queue"
-	"github.com/AkikoAkaki/async-task-platfrom/internal/scheduler"
-	"github.com/AkikoAkaki/async-task-platfrom/internal/storage/redis"
+	pb "github.com/AkikoAkaki/async-task-platform/api/proto"
+	"github.com/AkikoAkaki/async-task-platform/internal/conf"
+	"github.com/AkikoAkaki/async-task-platform/internal/queue"
+	"github.com/AkikoAkaki/async-task-platform/internal/scheduler"
+	"github.com/AkikoAkaki/async-task-platform/internal/storage/redis"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -39,7 +39,7 @@ func main() {
 	// 3. 异步调度组件启动。
 	// @Watchdog: 负责可见性超时任务的自动恢复。
 	wd := scheduler.NewWatchdog(cfg.Queue, store)
-    wd.Start()
+	wd.Start()
 
 	// 4. 网络层监听。
 	// @Address: 默认从配置中读取 gRPC 端口号。
