@@ -6,9 +6,9 @@ import (
 	"context"
 	"time"
 
-	pb "github.com/AkikoAkaki/distributed-delay-queue/api/proto"
-	"github.com/AkikoAkaki/distributed-delay-queue/internal/common/errno"
-	"github.com/AkikoAkaki/distributed-delay-queue/internal/storage"
+	pb "github.com/AkikoAkaki/async-task-platfrom/api/proto"
+	"github.com/AkikoAkaki/async-task-platfrom/internal/common/errno"
+	"github.com/AkikoAkaki/async-task-platfrom/internal/storage"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

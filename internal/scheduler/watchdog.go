@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AkikoAkaki/distributed-delay-queue/internal/conf"
-	"github.com/AkikoAkaki/distributed-delay-queue/internal/storage"
+	"github.com/AkikoAkaki/async-task-platfrom/internal/conf"
+	"github.com/AkikoAkaki/async-task-platfrom/internal/storage"
 )
 
 // Watchdog 看门狗组件，负责定期扫描并恢复异常任务（如 Worker 宕机导致的未 Ack 任务）。

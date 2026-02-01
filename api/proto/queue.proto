@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package api.queue;
 
-option go_package = "github.com/AkikoAkaki/distributed-delay-queue/api/proto;pb";
+option go_package = "github.com/AkikoAkaki/async-task-platfrom/api/proto;pb";
 
 // DelayQueueService 定义了分布式延迟队列的核心能力。
 service DelayQueueService {

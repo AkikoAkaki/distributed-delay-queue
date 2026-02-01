@@ -10,11 +10,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	pb "github.com/AkikoAkaki/distributed-delay-queue/api/proto"
-	"github.com/AkikoAkaki/distributed-delay-queue/internal/conf"
-	"github.com/AkikoAkaki/distributed-delay-queue/internal/queue"
-	"github.com/AkikoAkaki/distributed-delay-queue/internal/scheduler"
-	"github.com/AkikoAkaki/distributed-delay-queue/internal/storage/redis"
+	pb "github.com/AkikoAkaki/async-task-platfrom/api/proto"
+	"github.com/AkikoAkaki/async-task-platfrom/internal/conf"
+	"github.com/AkikoAkaki/async-task-platfrom/internal/queue"
+	"github.com/AkikoAkaki/async-task-platfrom/internal/scheduler"
+	"github.com/AkikoAkaki/async-task-platfrom/internal/storage/redis"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )

@@ -8,7 +8,7 @@ package storage
 import (
 	"context"
 
-	pb "github.com/AkikoAkaki/distributed-delay-queue/api/proto"
+	pb "github.com/AkikoAkaki/async-task-platfrom/api/proto"
 )
 
 // JobStore 定义了任务存储层的行为契约。

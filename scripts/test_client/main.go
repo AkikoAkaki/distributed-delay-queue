@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 
-	pb "github.com/AkikoAkaki/distributed-delay-queue/api/proto"
+	pb "github.com/AkikoAkaki/async-task-platfrom/api/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

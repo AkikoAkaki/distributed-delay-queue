@@ -1,5 +1,5 @@
 app:
-  name: "distributed-delay-queue"
+  name: "async-task-platfrom"
   env: "local" # local, dev, prod
 
 server:

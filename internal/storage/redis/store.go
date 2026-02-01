@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	pb "github.com/AkikoAkaki/distributed-delay-queue/api/proto"
-	"github.com/AkikoAkaki/distributed-delay-queue/internal/storage"
+	pb "github.com/AkikoAkaki/async-task-platfrom/api/proto"
+	"github.com/AkikoAkaki/async-task-platfrom/internal/storage"
 	"github.com/redis/go-redis/v9"
 )
 

@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	pb "github.com/AkikoAkaki/distributed-delay-queue/api/proto"
+	pb "github.com/AkikoAkaki/async-task-platform/api/proto"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -125,3 +125,4 @@ func (mr *MockJobStoreMockRecorder) Remove(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Remove", reflect.TypeOf((*MockJobStore)(nil).Remove), ctx, id)
 }
+

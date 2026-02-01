@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/AkikoAkaki/distributed-delay-queue/internal/conf"
-	"github.com/AkikoAkaki/distributed-delay-queue/internal/storage/redis"
+	"github.com/AkikoAkaki/async-task-platfrom/internal/conf"
+	"github.com/AkikoAkaki/async-task-platfrom/internal/storage/redis"
 )
 
 func main() {

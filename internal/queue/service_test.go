@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	pb "github.com/AkikoAkaki/distributed-delay-queue/api/proto"
-	"github.com/AkikoAkaki/distributed-delay-queue/internal/storage/mocks"
+	pb "github.com/AkikoAkaki/async-task-platfrom/api/proto"
+	"github.com/AkikoAkaki/async-task-platfrom/internal/storage/mocks"
 	"go.uber.org/mock/gomock"
 )
 
